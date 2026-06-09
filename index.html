@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>화학 평형 이동 시뮬레이션</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            min-height: 100vh;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #e0e0ff;
+            text-shadow: 0 0 10px rgba(150,100,255,0.8);
+        }
+
+        /* ── 화학식 ── */
+        .equation-box {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 100%;
+            max-width: 950px;
+            backdrop-filter: blur(10px);
+        }
+
+        .equation {
+            font-size: 1.3rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .reactant { color: #64b5f6; }
+        .product  { color: #ef9a9a; }
+
+        .arrow-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 10px;
+        }
+
+        .forward-label { color: #ff6b6b; font-size: 0.75rem; margin-bottom: 2px; }
+        .reverse-label { color: #4fc3f7; font-size: 0.75rem; margin-top:  2px; }
+        .eq-arrows     { font-size: 1.5rem; color: #ffd700; }
+
+        .reaction-info {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            font-size: 0.9rem;
+            flex-wrap: wrap;
+        }
+
+        .forward-info {
+            color: #ff8a80;
+            background: rgba(255,100,100,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,100,100,0.5);
+        }
+
+        .reverse-info {
+            color: #80d8ff;
+            background: rgba(100,180,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid rgba(100,180,255,0.5);
+        }
+
+        /* ── 반응 방향 ── */
+        .direction-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        .dir-arrow { font-size: 2rem; font-weight: bold; transition: all 0.5s; opacity: 0.3; }
+
+        .dir-arrow.active-forward {
+            color: #64b5f6; opacity: 1;
+            text-shadow: 0 0 15px rgba(100,181,246,0.8);
+            animation: pulse 1s infinite;
+        }
+
+        .dir-arrow.active-reverse {
+            color: #ef9a9a; opacity: 1;
+            text-shadow: 0 0 15px rgba(239,154,154,0.8);
+            animation: pulse 1s infinite;
+        }
+
+        .dir-label-fwd { font-size: 0.8rem; color: #64b5f6; }
+        .dir-label-rev { font-size: 0.8rem; color: #ef9a9a; }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50%       { transform: scale(1.2); }
+        }
+
+        /* ── 상태 표시 ── */
+        .status-bar {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin-bottom: 15px;
+            text-align: center;
+            width: 100%;
+            max-width: 950px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-text    { font-size: 1rem; color: #ffd700; font-weight: bold; }
+        .reaction-detail { font-size: 0.85rem; color: #b0bec5; margin-top: 5px; }
+
+        /* ── 메인 레이아웃 ── */
+        .main-layout {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 950px;
+            margin-bottom: 20px;
+        }
+
+        /* ══════════════════════════════
+           온도 컨트롤 (버튼 방식)
+        ══════════════════════════════ */
+        .temp-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,150,100,0.5);
+            border-radius: 15px;
+            padding: 15px 12px;
+            width: 130px;
+            backdrop-filter: blur(10px);
+            gap: 4px;
+        }
+
+        .temp-control h3 { color: #ffab76; font-size: 1rem; margin-bottom: 4px; }
+
+        /* 온도 게이지 바 */
+        .temp-gauge-wrap {
+            position: relative;
+            width: 28px;
+            height: 160px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.25);
+            overflow: hidden;
+            margin: 6px 0;
+        }
+
+        .temp-gauge-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            border-radius: 0 0 12px 12px;
+            transition: height 0.4s ease, background 0.4s ease;
+        }
+
+        .temp-gauge-center {
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: rgba(255,255,255,0.45);
+            /* 25°C = 중간 = 50% */
+            bottom: 50%;
+        }
+
+        /* 온도 수치 표시 */
+        .temp-display-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .temp-value {
+            font-size: 1.45rem;
+            font-weight: bold;
+            color: #ffd700;
+            line-height: 1;
+        }
+
+        .temp-unit { font-size: 0.78rem; color: #ffab76; }
+
+        /* 온도 버튼 공통 */
+        .temp-btn {
+            width: 64px;
+            height: 46px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.6rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .temp-btn:active  { transform: scale(0.93); }
+
+        .temp-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .temp-up {
+            background: linear-gradient(135deg, #ef9a9a, #e53935);
+            color: white;
+        }
+
+        .temp-up:hover:not(:disabled) {
+            background: linear-gradient(135deg, #e53935, #b71c1c);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(229,57,53,0.7);
+        }
+
+        .temp-down {
+            background: linear-gradient(135deg, #80deea, #00acc1);
+            color: white;
+        }
+
+        .temp-down:hover:not(:disabled) {
+            background: linear-gradient(135deg, #00acc1, #006064);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0,172,193,0.7);
+        }
+
+        .ctrl-btn-label {
+            font-size: 0.7rem;
+            color: #b0bec5;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        /* 단계 선택 */
+        .step-selector {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .step-btn {
+            padding: 3px 7px;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.08);
+            color: #ccc;
+            font-size: 0.68rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Malgun Gothic', sans-serif;
+        }
+
+        .step-btn.active {
+            background: rgba(255,171,118,0.45);
+            border-color: #ffab76;
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .step-btn:hover { background: rgba(255,255,255,0.18); }
+
+        /* ── 비커 ── */
+        .vessel-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .beaker-wrapper {
+            position: relative;
+            width: 240px;
+            height: 280px;
+        }
+
+        .beaker-svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 22px rgba(150,100,255,0.8));
+            transition: filter 0.4s;
+        }
+
+        .beaker-label-wrap {
+            position: absolute;
+            left: 30px; top: 20px;
+            width: 174px; height: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .color-label {
+            font-size: 1rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 2px 6px rgba(0,0,0,1);
+            background: rgba(0,0,0,0.45);
+            padding: 5px 14px;
+            border-radius: 10px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        .state-label {
+            font-size: 0.82rem;
+            color: white;
+            text-shadow: 0 1px 4px rgba(0,0,0,1);
+            background: rgba(0,0,0,0.45);
+            padding: 3px 10px;
+            border-radius: 8px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.78rem;
+            color: #ccc;
+        }
+
+        .legend-color {
+            width: 18px; height: 18px;
+            border-radius: 4px;
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+
+        .reset-btn {
+            margin-top: 12px;
+            padding: 8px 25px;
+            background: linear-gradient(135deg, #78909c, #546e7a);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-family: 'Malgun Gothic', sans-serif;
+            transition: all 0.3s;
+        }
+
+        .reset-btn:hover {
+            background: linear-gradient(135deg, #546e7a, #37474f);
+            transform: scale(1.05);
+        }
+
+        /* ── 압력 컨트롤 ── */
+        .pressure-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(100,200,255,0.5);
+            border-radius: 15px;
+            padding: 15px 12px;
+            width: 140px;
+            backdrop-filter: blur(10px);
+            gap: 4px;
+        }
+
+        .pressure-control h3 { color: #80d8ff; font-size: 1rem; margin-bottom: 4px; }
+        .pressure-value { font-size: 1.45rem; font-weight: bold; color: #ffd700; line-height: 1; }
+        .pressure-unit  { font-size: 0.78rem; color: #80d8ff; }
+        .pressure-range { font-size: 0.68rem; color: #90caf9; text-align: center; line-height: 1.4; }
+
+        .pressure-btn {
+            width: 64px; height: 48px;
+            border: none; border-radius: 10px;
+            font-size: 1.7rem;
+            cursor: pointer; font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .pressure-btn:active  { transform: scale(0.93); }
+
+        .pressure-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .pressure-up {
+            background: linear-gradient(135deg, #ef9a9a, #e57373);
+            color: white;
+        }
+
+        .pressure-up:hover:not(:disabled) {
+            background: linear-gradient(135deg, #e57373, #ef5350);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(239,83,80,0.7);
+        }
+
+        .pressure-down {
+            background: linear-gradient(135deg, #80deea, #4dd0e1);
+            color: white;
+        }
+
+        .pressure-down:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4dd0e1, #00bcd4);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0,188,212,0.7);
+        }
+
+        /* ── 용액 추가 ── */
+        .additive-section {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            padding: 18px 24px;
+            width: 100%;
+            max-width: 950px;
+            backdrop-filter: blur(10px);
+        }
+
+        .additive-section h3 {
+            text-align: center;
+            margin-bottom: 14px;
+            color: #e0e0ff;
+            font-size: 1rem;
+        }
+
+        .additive-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .add-btn {
+            padding: 14px 28px;
+            border: none; border-radius: 14px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-family: 'Malgun Gothic', sans-serif;
+            font-weight: bold;
+            min-width: 160px;
+            text-align: center;
+            transition: all 0.25s;
+        }
+
+        .add-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+        }
+
+        .add-btn:active { transform: translateY(0); }
+
+        .reactant-btn {
+            background: linear-gradient(135deg, #1e88e5, #0d47a1);
+            color: white;
+            border: 2px solid rgba(100,181,246,0.7);
+            box-shadow: 0 4px 14px rgba(30,136,229,0.5);
+        }
+
+        .reactant-btn:hover {
+            background: linear-gradient(135deg, #1565c0, #01579b);
+            box-shadow: 0 8px 24px rgba(30,136,229,0.7);
+        }
+
+        .product-btn {
+            background: linear-gradient(135deg, #e53935, #7f0000);
+            color: white;
+            border: 2px solid rgba(239,154,154,0.7);
+            box-shadow: 0 4px 14px rgba(229,57,53,0.5);
+        }
+
+        .product-btn:hover {
+            background: linear-gradient(135deg, #b71c1c, #4a0000);
+            box-shadow: 0 8px 24px rgba(229,57,53,0.7);
+        }
+    </style>
+</head>
+<body>
+
+<h1>🧪 화학 평형 이동 시뮬레이션</h1>
+
+<!-- 화학식 -->
+<div class="equation-box">
+    <div class="equation">
+        <span class="reactant">CoCl₂·6H₂O</span>
+        <span class="reactant">+ 4Cl⁻(aq)</span>
+        <div class="arrow-container">
+            <span class="forward-label">→ 정반응 (흡열, ΔH &gt; 0)</span>
+            <span class="eq-arrows">⇌</span>
+            <span class="reverse-label">← 역반응 (발열, ΔH &lt; 0)</span>
+        </div>
+        <span class="product">[CoCl₄]²⁻(aq)</span>
+        <span class="product">+ 6H₂O</span>
+    </div>
+    <div class="reaction-info">
+        <span class="forward-info">🔥 정반응: 흡열 반응 — 온도↑ 또는 압력↓ 시 진행</span>
+        <span class="reverse-info">❄️ 역반응: 발열 반응 — 온도↓ 또는 압력↑ 시 진행</span>
+    </div>
+</div>
+
+<!-- 반응 방향 인디케이터 -->
+<div class="direction-indicator">
+    <span class="dir-label-fwd">정반응 (→)</span>
+    <span class="dir-arrow" id="forwardArrow">→</span>
+    <span style="color:#ffd700;font-size:1.2rem;font-weight:bold;">⚖️ 평형</span>
+    <span class="dir-arrow" id="reverseArrow">←</span>
+    <span class="dir-label-rev">(←) 역반응</span>
+</div>
+
+<!-- 상태 표시 -->
+<div class="status-bar">
+    <div class="status-text"   id="statusText">⚖️ 현재 상태: 화학 평형 (보라색)</div>
+    <div class="reaction-detail" id="reactionDetail">온도 25.0°C, 압력 1.00 atm — 정반응과 역반응이 동일한 속도로 진행 중</div>
+</div>
+
+<!-- 메인 레이아웃 -->
+<div class="main-layout">
+
+    <!-- ══ 온도 컨트롤 (왼쪽) ══ -->
+    <div class="temp-control">
+        <h3>🌡️ 온도</h3>
+
+        <!-- 수치 -->
+        <div class="temp-display-box">
+            <div class="temp-value" id="tempDisplay">25.0</div>
+            <div class="temp-unit">°C</div>
+        </div>
+
+        <!-- 온도 올리기 -->
+        <div class="ctrl-btn-label">온도 증가<br>정반응 ↑</div>
+        <button class="temp-btn temp-up"
+                id="btnTempUp"
+                onclick="changeTemp(1)">▲</button>
+
+        <!-- 시각적 게이지 -->
+        <div class="temp-gauge-wrap">
+            <div class="temp-gauge-center"></div>
+            <div class="temp-gauge-fill" id="tempGauge"></div>
+        </div>
+
+        <!-- 온도 낮추기 -->
+        <button class="temp-btn temp-down"
+                id="btnTempDown"
+                onclick="changeTemp(-1)">▼</button>
+        <div class="ctrl-btn-label">온도 감소<br>역반응 ↑</div>
+
+        <!-- 단계 선택 -->
+        <div class="step-selector" id="tempStepSelector">
+            <button class="step-btn" onclick="setTempStep(0.5)">0.5°</button>
+            <button class="step-btn active" onclick="setTempStep(1)">1°</button>
+            <button class="step-btn" onclick="setTempStep(5)">5°</button>
+            <button class="step-btn" onclick="setTempStep(10)">10°</button>
+        </div>
+    </div>
+
+    <!-- ══ 비커 (가운데) ══ -->
+    <div class="vessel-container">
+        <div class="beaker-wrapper">
+            <svg class="beaker-svg" id="beakerSvg"
+                 viewBox="0 0 240 280" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <clipPath id="liquidClip">
+                        <path d="M30,20 L30,214 Q30,234 50,234 L190,234 Q210,234 210,214 L210,20 Z"/>
+                    </clipPath>
+                    <linearGradient id="liquidGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop id="gradStop1" offset="0%"   stop-color="rgb(148,0,211)"/>
+                        <stop id="gradStop2" offset="100%" stop-color="rgb(100,0,160)"/>
+                    </linearGradient>
+                    <linearGradient id="beakerShine" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%"   stop-color="rgba(255,255,255,0.0)"/>
+                        <stop offset="25%"  stop-color="rgba(255,255,255,0.15)"/>
+                        <stop offset="100%" stop-color="rgba(255,255,255,0.0)"/>
+                    </linearGradient>
+                </defs>
+
+                <!-- 액체 -->
+                <rect id="liquidRect" x="0" y="0" width="240" height="280"
+                      fill="url(#liquidGrad)" clip-path="url(#liquidClip)"/>
+
+                <!-- 액체 표면 -->
+                <ellipse cx="120" cy="20" rx="90" ry="8"
+                         fill="rgba(255,255,255,0.18)"
+                         clip-path="url(#liquidClip)"/>
+
+                <!-- 파티클 -->
+                <g id="svgParticles" clip-path="url(#liquidClip)" opacity="0.55"></g>
+
+                <!-- 비커 테두리 -->
+                <line x1="30"  y1="20"  x2="30"  y2="214"
+                      stroke="rgba(255,255,255,0.75)" stroke-width="3.5" stroke-linecap="round"/>
+                <line x1="210" y1="20"  x2="210" y2="214"
+                      stroke="rgba(255,255,255,0.75)" stroke-width="3.5" stroke-linecap="round"/>
+                <path d="M30,214 Q30,234 50,234 L190,234 Q210,234 210,214"
+                      fill="none" stroke="rgba(255,255,255,0.75)"
+                      stroke-width="3.5" stroke-linecap="round"/>
+
+                <!-- 입구 -->
+                <rect x="24" y="12" width="186" height="14" rx="5"
+                      fill="rgba(200,220,255,0.15)"
+                      stroke="rgba(255,255,255,0.8)" stroke-width="3"/>
+
+                <!-- 주둥이 -->
+                <path d="M178,12 L196,2 L214,12"
+                      fill="none" stroke="rgba(255,255,255,0.75)"
+                      stroke-width="3" stroke-linejoin="round"/>
+
+                <!-- 눈금 -->
+                <line x1="36" y1="80"  x2="56" y2="80"
+                      stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+                <text x="60" y="84" fill="rgba(255,255,255,0.55)" font-size="10">75</text>
+                <line x1="36" y1="120" x2="56" y2="120"
+                      stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+                <text x="60" y="124" fill="rgba(255,255,255,0.55)" font-size="10">50</text>
+                <line x1="36" y1="160" x2="56" y2="160"
+                      stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+                <text x="60" y="164" fill="rgba(255,255,255,0.55)" font-size="10">25</text>
+                <line x1="36" y1="200" x2="46" y2="200"
+                      stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+
+                <!-- 광택 -->
+                <rect x="30" y="20" width="180" height="214"
+                      fill="url(#beakerShine)" clip-path="url(#liquidClip)"/>
+                <line x1="38" y1="22" x2="38" y2="210"
+                      stroke="rgba(255,255,255,0.18)" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+
+            <div class="beaker-label-wrap">
+                <div class="color-label" id="colorLabel">보라색</div>
+                <div class="state-label"  id="stateLabel">⚖️ 평형 상태</div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background:#0d47a1;"></div>
+                <span>파랑 (정반응)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background:#7b1fa2;"></div>
+                <span>보라 (평형)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background:#7f0000;"></div>
+                <span>빨강 (역반응)</span>
+            </div>
+        </div>
+
+        <button class="reset-btn" onclick="resetSimulation()">🔄 초기화</button>
+    </div>
+
+    <!-- ══ 압력 컨트롤 (오른쪽) ══ -->
+    <div class="pressure-control">
+        <h3>💨 압력</h3>
+        <div class="pressure-value" id="pressureDisplay">1.00</div>
+        <div class="pressure-unit">atm</div>
+        <div class="pressure-range">범위: 0.10 ~ 6.00 atm</div>
+
+        <div class="ctrl-btn-label">압력 증가<br>역반응 ↓</div>
+        <button class="pressure-btn pressure-up"
+                id="btnPressureUp"
+                onclick="changePressure(1)">▲</button>
+
+        <div style="height:8px;"></div>
+
+        <button class="pressure-btn pressure-down"
+                id="btnPressureDown"
+                onclick="changePressure(-1)">▼</button>
+        <div class="ctrl-btn-label">압력 감소<br>정반응 ↑</div>
+
+        <!-- 압력 단계 선택 -->
+        <div class="step-selector" id="pressStepSelector">
+            <button class="step-btn" onclick="setPressStep(0.1)">0.1</button>
+            <button class="step-btn active" onclick="setPressStep(0.25)">0.25</button>
+            <button class="step-btn" onclick="setPressStep(0.5)">0.5</button>
+            <button class="step-btn" onclick="setPressStep(1)">1.0</button>
+        </div>
+    </div>
+
+</div>
+
+<!-- 용액 추가 -->
+<div class="additive-section">
+    <h3>💧 용액 추가</h3>
+    <div class="additive-buttons">
+        <button class="add-btn reactant-btn" onclick="addSubstance('CoCl2', true)">
+            CoCl₂·6H₂O
+        </button>
+        <button class="add-btn reactant-btn" onclick="addSubstance('Cl-', true)">
+            Cl⁻(aq)
+        </button>
+        <button class="add-btn product-btn" onclick="addSubstance('CoCl4', false)">
+            [CoCl₄]²⁻
+        </button>
+        <button class="add-btn product-btn" onclick="addSubstance('H2O', false)">
+            H₂O
+        </button>
+    </div>
+</div>
+
+<script>
+    // ── 상태 변수 ──────────────────────────────────────
+    let temperature      = 25.0;
+    let pressure         = 1.00;
+    let equilibriumShift = 0;
+    let targetShift      = 0;
+    let animationId      = null;
+
+    const TEMP_MIN     = -30;
+    const TEMP_MAX     =  80;
+    const PRESSURE_MIN =  0.10;
+    const PRESSURE_MAX =  6.00;
+
+    let tempStep   = 1;      // 기본 온도 단계
+    let pressStep  = 0.25;   // 기본 압력 단계
+
+    // ── SVG 파티클 ─────────────────────────────────────
+    const svgParticles = document.getElementById('svgParticles');
+    const NUM_PARTICLES = 22;
+    let particleData = [];
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+        let circle = document.createElementNS("http://www.w3.org/2000/svg","circle");
+        let p = {
+            x:  38 + Math.random() * 162,
+            y:  24 + Math.random() * 190,
+            r:  Math.random() * 5 + 2,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: (Math.random() - 0.5) * 1.2,
+            el: circle
+        };
+        circle.setAttribute("r",    p.r);
+        circle.setAttribute("fill", "rgba(255,255,255,0.55)");
+        svgParticles.appendChild(circle);
+        particleData.push(p);
+    }
+
+    (function animateSVGParticles() {
+        particleData.forEach(p => {
+            p.x += p.vx;  p.y += p.vy;
+            if (p.x < 34  || p.x > 206) p.vx *= -1;
+            if (p.y < 22  || p.y > 232) p.vy *= -1;
+            p.el.setAttribute("cx", p.x);
+            p.el.setAttribute("cy", p.y);
+        });
+        requestAnimationFrame(animateSVGParticles);
+    })();
+
+    // ── 색상 계산 ──────────────────────────────────────
+    function shiftToColor(shift) {
+        if (shift >= 0) {
+            // 보라(148,0,211) → 파랑(0,50,200)
+            let t = shift;
+            return {
+                r:  Math.round(148 + (0   - 148) * t),
+                g:  Math.round(0   + (50  -   0) * t),
+                b:  Math.round(211 + (200 - 211) * t),
+                r2: Math.round(100 + (0   - 100) * t),
+                g2: Math.round(0   + (20  -   0) * t),
+                b2: Math.round(160 + (150 - 160) * t)
+            };
+        } else {
+            // 보라(148,0,211) → 빨강(220,0,0)
+            let t = -shift;
+            return {
+                r:  Math.round(148 + (220 - 148) * t),
+                g:  Math.round(0),
+                b:  Math.round(211 + (0   - 211) * t),
+                r2: Math.round(100 + (140 - 100) * t),
+                g2: Math.round(0),
+                b2: Math.round(160 + (0   - 160) * t)
+            };
+        }
+    }
+
+    function applyColor(c) {
+        document.getElementById('gradStop1')
+            .setAttribute('stop-color', `rgb(${c.r},${c.g},${c.b})`);
+        document.getElementById('gradStop2')
+            .setAttribute('stop-color', `rgb(${c.r2},${c.g2},${c.b2})`);
+
+        const colorLabel = document.getElementById('colorLabel');
+        const stateLabel = document.getElementById('stateLabel');
+
+        if (equilibriumShift > 0.15) {
+            colorLabel.textContent = '파란색';
+            stateLabel.textContent = '→ 정반응 진행 중';
+        } else if (equilibriumShift < -0.15) {
+            colorLabel.textContent = '빨간색';
+            stateLabel.textContent = '← 역반응 진행 중';
+        } else {
+            colorLabel.textContent = '보라색';
+            stateLabel.textContent = '⚖️ 평형 상태';
+        }
+    }
+
+    // ── 온도 게이지 업데이트 ───────────────────────────
+    function updateTempGauge() {
+        const gauge = document.getElementById('tempGauge');
+        // TEMP_MIN~TEMP_MAX → 0~100%
+        let pct = (temperature - TEMP_MIN) / (TEMP_MAX - TEMP_MIN) * 100;
+        gauge.style.height = pct + '%';
+
+        // 온도에 따라 게이지 색
+        if (temperature > 25) {
+            // 따뜻 → 빨강 계열
+            let t = (temperature - 25) / (TEMP_MAX - 25);
+            let r = Math.round(255);
+            let g = Math.round(180 - 150 * t);
+            let b = Math.round(80  - 80  * t);
+            gauge.style.background =
+                `linear-gradient(to top, rgb(${r},${Math.max(0,g)},${Math.max(0,b)}), rgba(255,200,100,0.6))`;
+        } else if (temperature < 25) {
+            // 차가움 → 파랑 계열
+            let t = (25 - temperature) / (25 - TEMP_MIN);
+            let r = Math.round(80  - 80  * t);
+            let g = Math.round(180 - 100 * t);
+            let b = Math.round(255);
+            gauge.style.background =
+                `linear-gradient(to top, rgb(${Math.max(0,r)},${Math.max(0,g)},${b}), rgba(100,200,255,0.6))`;
+        } else {
+            gauge.style.background =
+                'linear-gradient(to top, rgba(200,150,255,0.9), rgba(150,100,200,0.5))';
+        }
+    }
+
+    // ── 평형 계산 ──────────────────────────────────────
+    function calculateTargetShift() {
+        let shift = 0;
+        shift += (temperature - 25) / 55 * 0.95;
+        shift -= (pressure - 1.00) / 5.0 * 0.95;
+        return Math.max(-1, Math.min(1, shift));
+    }
+
+    function updateEquilibrium() {
+        targetShift = calculateTargetShift();
+        if (animationId) clearInterval(animationId);
+        animationId = setInterval(() => {
+            let diff = targetShift - equilibriumShift;
+            if (Math.abs(diff) < 0.004) {
+                equilibriumShift = targetShift;
+                clearInterval(animationId);
+            } else {
+                equilibriumShift += diff * 0.05;
+            }
+            applyColor(shiftToColor(equilibriumShift));
+            updateArrows();
+            updateStatusText();
+        }, 50);
+    }
+
+    // ── 화살표 ─────────────────────────────────────────
+    function updateArrows() {
+        const fwd = document.getElementById('forwardArrow');
+        const rev = document.getElementById('reverseArrow');
+        fwd.className = 'dir-arrow';
+        rev.className = 'dir-arrow';
+        if      (equilibriumShift >  0.15) fwd.className = 'dir-arrow active-forward';
+        else if (equilibriumShift < -0.15) rev.className = 'dir-arrow active-reverse';
+    }
+
+    // ── 상태 텍스트 ────────────────────────────────────
+    function updateStatusText() {
+        const st = document.getElementById('statusText');
+        const rd = document.getElementById('reactionDetail');
+        let status, detail;
+
+        if (equilibriumShift > 0.5) {
+            status = '🔵 현재 상태: 정반응 진행 중 (파란색)';
+            detail = '[CoCl₄]²⁻ 생성 중 — 흡열 반응 진행';
+        } else if (equilibriumShift > 0.15) {
+            status = '🔵 현재 상태: 정반응 방향으로 이동 중';
+            detail = '온도 상승 또는 압력 감소로 정반응 우세';
+        } else if (equilibriumShift < -0.5) {
+            status = '🔴 현재 상태: 역반응 진행 중 (빨간색)';
+            detail = 'CoCl₂·6H₂O 생성 중 — 발열 반응 진행';
+        } else if (equilibriumShift < -0.15) {
+            status = '🔴 현재 상태: 역반응 방향으로 이동 중';
+            detail = '온도 감소 또는 압력 증가로 역반응 우세';
+        } else {
+            status = '⚖️ 현재 상태: 화학 평형 (보라색)';
+            detail = '정반응과 역반응이 동일한 속도로 진행 중';
+        }
+        st.textContent = status;
+        rd.textContent =
+            `온도 ${temperature.toFixed(1)}°C, 압력 ${pressure.toFixed(2)} atm — ` + detail;
+    }
+
+    // ── 버튼 활성/비활성 ───────────────────────────────
+    function updateTempBtns() {
+        document.getElementById('btnTempUp').disabled   = (temperature >= TEMP_MAX);
+        document.getElementById('btnTempDown').disabled = (temperature <= TEMP_MIN);
+    }
+
+    function updatePressureBtns() {
+        document.getElementById('btnPressureUp').disabled   = (pressure >= PRESSURE_MAX);
+        document.getElementById('btnPressureDown').disabled = (pressure <= PRESSURE_MIN);
+    }
+
+    // ── 온도 변경 ──────────────────────────────────────
+    function changeTemp(dir) {
+        temperature = Math.round((temperature + dir * tempStep) * 10) / 10;
+        temperature = Math.max(TEMP_MIN, Math.min(TEMP_MAX, temperature));
+        document.getElementById('tempDisplay').textContent = temperature.toFixed(1);
+        updateTempBtns();
+        updateTempGauge();
+        updateEquilibrium();
+    }
+
+    // ── 온도 단계 설정 ─────────────────────────────────
+    function setTempStep(val) {
+        tempStep = val;
+        document.querySelectorAll('#tempStepSelector .step-btn').forEach(btn => {
+            btn.classList.toggle('active', parseFloat(btn.textContent) === val);
+        });
+    }
+
+    // ── 압력 변경 ──────────────────────────────────────
+    function changePressure(dir) {
+        pressure = Math.round((pressure + dir * pressStep) * 100) / 100;
+        pressure = Math.max(PRESSURE_MIN, Math.min(PRESSURE_MAX, pressure));
+        document.getElementById('pressureDisplay').textContent = pressure.toFixed(2);
+        updatePressureBtns();
+        updateEquilibrium();
+    }
+
+    // ── 압력 단계 설정 ─────────────────────────────────
+    function setPressStep(val) {
+        pressStep = val;
+        document.querySelectorAll('#pressStepSelector .step-btn').forEach(btn => {
+            btn.classList.toggle('active', parseFloat(btn.textContent) === val);
+        });
+    }
+
+    // ── 용액 추가 ──────────────────────────────────────
+    function addSubstance(type, isReactant) {
+        equilibriumShift += isReactant ? 0.38 : -0.38;
+        equilibriumShift  = Math.max(-1, Math.min(1, equilibriumShift));
+        flashEffect(isReactant);
+
+        if (animationId) clearInterval(animationId);
+        let bounceId = setInterval(() => {
+            applyColor(shiftToColor(equilibriumShift));
+            updateArrows();
+            updateStatusText();
+        }, 50);
+
+        setTimeout(() => {
+            clearInterval(bounceId);
+            updateEquilibrium();
+        }, 2200);
+    }
+
+    function flashEffect(isForward) {
+        const svg = document.getElementById('beakerSvg');
+        svg.style.filter = isForward
+            ? 'drop-shadow(0 0 30px rgba(30,136,229,1)) drop-shadow(0 0 10px rgba(100,181,246,0.8))'
+            : 'drop-shadow(0 0 30px rgba(229,57,53,1))  drop-shadow(0 0 10px rgba(239,154,154,0.8))';
+        setTimeout(() => {
+            svg.style.filter = 'drop-shadow(0 0 22px rgba(150,100,255,0.8))';
+        }, 700);
+    }
+
+    // ── 초기화 ─────────────────────────────────────────
+    function resetSimulation() {
+        temperature      = 25.0;
+        pressure         = 1.00;
+        equilibriumShift = 0;
+        targetShift      = 0;
+        tempStep         = 1;
+        pressStep        = 0.25;
+
+        document.getElementById('tempDisplay').textContent     = '25.0';
+        document.getElementById('pressureDisplay').textContent = '1.00';
+
+        // 단계 버튼 초기화
+        setTempStep(1);
+        setPressStep(0.25);
+
+        if (animationId) clearInterval(animationId);
+
+        applyColor(shiftToColor(0));
+        updateArrows();
+        updateStatusText();
+        updateTempBtns();
+        updatePressureBtns();
+        updateTempGauge();
+
+        document.getElementById('beakerSvg').style.filter =
+            'drop-shadow(0 0 22px rgba(150,100,255,0.8))';
+    }
+
+    // ── 초기 실행 ──────────────────────────────────────
+    applyColor(shiftToColor(0));
+    updateStatusText();
+    updateTempBtns();
+    updatePressureBtns();
+    updateTempGauge();
+</script>
+</body>
+</html>
